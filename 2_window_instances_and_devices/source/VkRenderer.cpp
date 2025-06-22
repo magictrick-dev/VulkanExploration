@@ -24,6 +24,7 @@ initialize(GLFWwindow *window)
 
         this->create_instance();
         this->get_physical_device();
+        this->create_logical_device();
 
     }
     catch (const std::runtime_error &e)
@@ -42,6 +43,7 @@ void VulkanRenderer::
 deinitialize()
 {
 
+    this->destroy_logical_device();
     this->destroy_instance();
 
 }
@@ -49,6 +51,11 @@ deinitialize()
 void VulkanRenderer::
 create_instance()
 {
+
+    // Enable validation layers.
+    this->validation_layers.push_back("VK_LAYER_KHRONOS_validation");
+    if (!this->check_validation_support()) 
+        throw std::runtime_error("Validation layers requested aren't available.");
 
     // Application information for a Vulkan instance.
     // NOTE(Chris): Mostly for developer convenience.
@@ -64,6 +71,8 @@ create_instance()
     VkInstanceCreateInfo create_info = {};
     create_info.sType                       = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     create_info.pApplicationInfo            = &application_info;
+    create_info.enabledLayerCount           = static_cast<uint32_t>(this->validation_layers.size());
+    create_info.ppEnabledLayerNames         = this->validation_layers.data();
 
     // Generate list to hold instance extensions.
     std::vector<const char*> instance_extensions;
@@ -77,6 +86,8 @@ create_instance()
         instance_extensions.push_back(glfw_extensions[i]);
 
     }
+
+    instance_extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 
     // Validate if the extensions are properly supported.
     if (!this->check_instance_extension_support(instance_extensions))
@@ -217,3 +228,81 @@ get_queue_families(VkPhysicalDevice &device) const
 
 }
 
+void VulkanRenderer::           
+create_logical_device()
+{
+
+    QueueFamilyIndices indices = this->get_queue_families(this->main_device.physical_device);
+
+    // Queues the logical device needs to create. (Need only 1 for now.)
+    float priority = 1.0f; // Priority range is (0.0f to 1.0f).
+    VkDeviceQueueCreateInfo queue_create_info = {};
+    queue_create_info.sType                 = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    queue_create_info.queueFamilyIndex      = indices.graphics_family;
+    queue_create_info.queueCount            = 1;
+    queue_create_info.pQueuePriorities      = &priority; // Assign queue priority.
+                                                         //
+    // Physical devices features the logical device uses.
+    VkPhysicalDeviceFeatures device_features = {};
+
+    // Create the logical device.
+    VkDeviceCreateInfo device_create_info = {};
+    device_create_info.sType                    = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    device_create_info.queueCreateInfoCount     = 1;
+    device_create_info.pQueueCreateInfos        = &queue_create_info;
+    device_create_info.enabledExtensionCount    = 0; // Number of logical device extensions.
+    device_create_info.ppEnabledExtensionNames  = nullptr;
+    device_create_info.enabledLayerCount        = static_cast<uint32_t>(this->validation_layers.size());
+    device_create_info.ppEnabledLayerNames      = this->validation_layers.data();
+    device_create_info.pEnabledFeatures         = &device_features;
+
+    VkResult result = vkCreateDevice(this->main_device.physical_device, &device_create_info, 
+            NULL, &this->main_device.logical_device);
+
+    if (result != VK_SUCCESS) throw std::runtime_error("Failed to create logical device.");
+
+    // Get logical device queue family at index 0.
+    vkGetDeviceQueue(this->main_device.logical_device, indices.graphics_family, 0, &this->graphics_queue);
+
+}
+
+void VulkanRenderer::          
+destroy_logical_device()
+{
+
+    vkDestroyDevice(this->main_device.logical_device, nullptr);
+
+}
+
+bool VulkanRenderer::           
+check_validation_support()
+{
+
+    uint32_t layer_count = 0;
+    vkEnumerateInstanceLayerProperties(&layer_count, nullptr);
+
+    std::vector<VkLayerProperties> available_layers(layer_count);
+    vkEnumerateInstanceLayerProperties(&layer_count, available_layers.data());
+
+    for (auto layer : this->validation_layers)
+    {
+
+        bool layer_found = false;
+        for (const auto &layer_properties : available_layers)
+        {
+
+            if (strcmp(layer, layer_properties.layerName) == 0)
+            {
+                layer_found = true;
+                break;
+            }
+
+        }
+
+        if (!layer_found) return false;
+
+    }
+
+    return true;
+
+}

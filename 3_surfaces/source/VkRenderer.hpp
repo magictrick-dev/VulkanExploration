@@ -1,8 +1,8 @@
 #ifndef SOURCE_VKRENDERER_HPP
 #define SOURCE_VKRENDERER_HPP
 #define GLFW_INCLUDE_VULKAN
+#include <vulkan/vulkan_core.h>
 #include <GLFW/glfw3.h>
-#include <stdexcept>
 #include <vector>
 #include <utilities.hpp>
 
@@ -23,23 +23,42 @@ class VulkanRenderer
     private:
         void            create_instance();
         void            create_logical_device();
+        void            create_surface();
+        void            create_swapchain();
+
         void            destroy_instance();
         void            destroy_logical_device();
+        void            destroy_surface();
+        void            destroy_swapchain();
 
         void            get_physical_device();
 
     private:
         bool            check_instance_extension_support(std::vector<const char*>& extensions);
         bool            check_device_suitability(VkPhysicalDevice &device);
+        bool            check_device_extension_support(VkPhysicalDevice &device);
         bool            check_validation_support();
 
         QueueFamilyIndices      get_queue_families(VkPhysicalDevice &device) const;
+        SwapChainDetails        get_swapchain_details(VkPhysicalDevice &device) const;
+
+        VkSurfaceFormatKHR      choose_optimal_surface_format(std::vector<VkSurfaceFormatKHR> &formats);
+        VkPresentModeKHR        choose_optimal_presentation_mode(std::vector<VkPresentModeKHR> &modes);
+        VkExtent2D              choose_swap_extent(const VkSurfaceCapabilitiesKHR &capabilities);
 
     private:
-        GLFWwindow *window;
+        GLFWwindow     *window;
 
-        VkInstance instance;
-        VkQueue graphics_queue;
+        VkInstance      instance;
+        VkQueue         graphics_queue;
+        VkQueue         presentation_queue;
+        VkSurfaceKHR    surface;
+        VkSwapchainKHR  swapchain;
+
+        VkFormat        swapchain_format;
+        VkExtent2D      swapchain_extent;
+        std::vector<SwapChainImage> swapchain_images;
+        VkImageView     create_image_view(VkImage image, VkFormat format, VkImageAspectFlags aspect_flags);
 
         struct
         {
@@ -47,7 +66,10 @@ class VulkanRenderer
             VkDevice            logical_device;
         } main_device;
 
+
+
         std::vector<const char*> validation_layers;
+        VkDebugUtilsMessengerEXT debug_messenger;
 
 };
 
